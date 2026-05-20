@@ -1,16 +1,23 @@
+# This Dockerfile must be built with the repository root as the Docker context.
+# For platforms that assume the context equals the Dockerfile directory, use the
+# repository-root Dockerfile instead.
+
 # Build stage
-FROM rust:1.80-slim as builder
+FROM rust:1.80-slim AS builder
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy the entire workspace
-COPY . .
+# Copy only the Rust workspace files needed for the backend image.
+COPY Cargo.toml Cargo.lock ./
+COPY backend/api/Cargo.toml backend/api/Cargo.toml
+COPY backend/api backend/api
+COPY cli/Cargo.toml cli/Cargo.toml
+COPY cli cli
 
-# Build both backend and cli
-# Using --package flags to ensure we build specific workspace members
+# Build both backend and cli from the workspace root.
 RUN cargo build --release --package txio-api --package txio
 
 # Runtime stage
@@ -20,7 +27,7 @@ FROM rust:1.80-slim
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
 
 # Copy backend binary
 COPY --from=builder /app/target/release/txio-api /app/api
