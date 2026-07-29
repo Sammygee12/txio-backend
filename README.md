@@ -116,6 +116,12 @@ Flags:
 > [!TIP]
 > Internal RPC errors live in the `-32000` to `-32002` range. Full registry is in `walkthrough.md`.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for bug reports, enhancement
+suggestions, and the PR process. Please also read our
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
