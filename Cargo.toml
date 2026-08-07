@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = ["api"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Victor Oladimeji"]
+license = "MIT"
+description = "The API behind txio — caches RPC traffic, persists collections, handles auth, resolves names"
+repository = "https://github.com/Txio-labs/txio-backend"
+homepage = "https://github.com/Txio-labs/txio-backend"
+
+[workspace.dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+mongodb = "2.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+jsonwebtoken = "9.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+reqwest = { version = "0.12", features = ["json"] }
+thiserror = "1.0"
+config = "0.14"
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.9"
+uuid = { version = "1", features = ["v4", "serde"] }
+dotenvy = "0.15"
+validator = { version = "0.16", features = ["derive"] }
+bcrypt = "0.15"
+tower-http = { version = "0.5", features = ["cors", "limit"] }
+tower = { version = "0.5", features = ["full"] }
+tower_governor = "0.5.0"
+brevo = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+regex = "1"
+base64 = "0.22"
+hmac = "0.13"
+sha2 = "0.11"
+urlencoding = "2"

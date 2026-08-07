@@ -36,28 +36,44 @@ pub enum AppError {
     Forbidden(String),
 }
 
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        let (status, error_message) = match self {
-            AppError::Database(ref e) => {
+impl AppError {
+    /// The status code and user-facing message for this error, in one place
+    /// so redirect-based flows (OAuth callbacks) and JSON responses stay
+    /// consistent — internals (DB/config/internal errors) are logged but
+    /// never leaked to the client either way.
+    pub fn status_and_message(&self) -> (StatusCode, &str) {
+        match self {
+            AppError::Database(e) => {
                 tracing::error!("Database error: {}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
             }
             AppError::Config(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Configuration error"),
-            AppError::NotFound(ref msg) => (StatusCode::NOT_FOUND, msg.as_str()),
-            AppError::Unauthorized(ref msg) => (StatusCode::UNAUTHORIZED, msg.as_str()),
-            AppError::BadRequest(ref msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
-            AppError::Forbidden(ref msg) => (StatusCode::FORBIDDEN, msg.as_str()),
-            AppError::ValidationError(ref msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
-            AppError::InternalError(ref msg) => {
+            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.as_str()),
+            AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.as_str()),
+            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
+            AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.as_str()),
+            AppError::ValidationError(msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
+            AppError::InternalError(msg) => {
                 tracing::error!("Internal error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
             }
-            AppError::ExternalService(ref msg) => {
+            AppError::ExternalService(msg) => {
                 tracing::error!("External service error: {}", msg);
                 (StatusCode::BAD_GATEWAY, "External service unavailable")
             }
-        };
+        }
+    }
+
+    /// The user-facing message alone, e.g. for building an OAuth error
+    /// redirect where there's no JSON body to carry a status code.
+    pub fn user_message(&self) -> &str {
+        self.status_and_message().1
+    }
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        let (status, error_message) = self.status_and_message();
 
         let body = Json(json!({
             "error": error_message,

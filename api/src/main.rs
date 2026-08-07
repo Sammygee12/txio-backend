@@ -239,7 +239,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .timeout(REQUEST_TIMEOUT),
         )
         .layer(RequestBodyLimitLayer::new(MAX_REQUEST_BODY_BYTES))
-        .layer(GovernorLayer::new(governor_conf))
+        .layer(GovernorLayer {
+            config: governor_conf,
+        })
         .layer(axum::Extension(jwt_helper))
         .layer(cors);
 

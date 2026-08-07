@@ -1,5 +1,6 @@
 [package]
 name = "txio-api"
+default-run = "txio-api"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

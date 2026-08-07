@@ -493,8 +493,42 @@ pub async fn google_callback(
     axum::extract::Query(query): axum::extract::Query<OAuthCallbackQuery>,
     headers: axum::http::HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-) -> Result<axum::response::Response, AppError> {
-    let cookie_state = get_cookie(&headers, "oauth_state")
+) -> axum::response::Response {
+    let frontend_url =
+        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+
+    // On success this redirects with `#token=`; on failure — anywhere in the
+    // exchange, from a state mismatch through the account-linking check — it
+    // redirects back with `#error=` instead of returning raw JSON. A bare
+    // JSON error at this URL leaves the user stranded on the backend's own
+    // domain with no way back into the app.
+    match google_callback_inner(&service, &query, &headers, &addr).await {
+        Ok(token) => {
+            let redirect_to = format!(
+                "{}/#token={}",
+                frontend_url.trim_end_matches('/'),
+                urlencoding::encode(&token)
+            );
+            axum::response::Redirect::temporary(&redirect_to).into_response()
+        }
+        Err(err) => {
+            let redirect_to = format!(
+                "{}/#error={}",
+                frontend_url.trim_end_matches('/'),
+                urlencoding::encode(err.user_message())
+            );
+            axum::response::Redirect::temporary(&redirect_to).into_response()
+        }
+    }
+}
+
+async fn google_callback_inner(
+    service: &AuthService,
+    query: &OAuthCallbackQuery,
+    headers: &axum::http::HeaderMap,
+    addr: &SocketAddr,
+) -> Result<String, AppError> {
+    let cookie_state = get_cookie(headers, "oauth_state")
         .ok_or(AppError::BadRequest("Missing OAuth state cookie".into()))?;
 
     let query_state = query
@@ -519,8 +553,6 @@ pub async fn google_callback(
     }
     let redirect_uri = std::env::var("GOOGLE_REDIRECT_URL")
         .unwrap_or_else(|_| default_oauth_redirect_uri("google"));
-    let frontend_url =
-        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
@@ -577,25 +609,9 @@ pub async fn google_callback(
         .oauth_login_or_register(google_sub.to_string(), email.to_string())
         .await?;
 
-    record_login_session(&service, &auth_res.token, &headers, &addr).await;
+    record_login_session(service, &auth_res.token, headers, addr).await;
 
-    // Hand the JWT to the frontend via a URL fragment, not a cookie: the
-    // backend (this Render service) and the frontend (Vercel, a different
-    // eTLD+1) are different sites, so a cookie this response sets via
-    // Set-Cookie is scoped to *this* domain and is never visible to
-    // document.cookie on the frontend's origin after the redirect — the
-    // browser simply has no shared storage to bridge them. A URL fragment
-    // (`#...`) is never sent to any server (not this one on the redirect,
-    // not the frontend's on page load) and is stripped from Referer
-    // headers, so it keeps most of the leakage protection a cookie would
-    // have given if the two apps shared a parent domain.
-    let redirect_to = format!(
-        "{}/#token={}",
-        frontend_url.trim_end_matches('/'),
-        urlencoding::encode(&auth_res.token)
-    );
-
-    Ok(axum::response::Redirect::temporary(&redirect_to).into_response())
+    Ok(auth_res.token)
 }
 
 pub async fn github_login() -> Result<axum::response::Response, AppError> {
@@ -631,8 +647,40 @@ pub async fn github_callback(
     axum::extract::Query(query): axum::extract::Query<OAuthCallbackQuery>,
     headers: axum::http::HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-) -> Result<axum::response::Response, AppError> {
-    let cookie_state = get_cookie(&headers, "oauth_state")
+) -> axum::response::Response {
+    let frontend_url =
+        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+
+    // See the matching comment in google_callback: failures redirect back to
+    // the frontend with `#error=` instead of returning raw JSON, so the user
+    // always lands back in the app with something to show them.
+    match github_callback_inner(&service, &query, &headers, &addr).await {
+        Ok(token) => {
+            let redirect_to = format!(
+                "{}/#token={}",
+                frontend_url.trim_end_matches('/'),
+                urlencoding::encode(&token)
+            );
+            axum::response::Redirect::temporary(&redirect_to).into_response()
+        }
+        Err(err) => {
+            let redirect_to = format!(
+                "{}/#error={}",
+                frontend_url.trim_end_matches('/'),
+                urlencoding::encode(err.user_message())
+            );
+            axum::response::Redirect::temporary(&redirect_to).into_response()
+        }
+    }
+}
+
+async fn github_callback_inner(
+    service: &AuthService,
+    query: &OAuthCallbackQuery,
+    headers: &axum::http::HeaderMap,
+    addr: &SocketAddr,
+) -> Result<String, AppError> {
+    let cookie_state = get_cookie(headers, "oauth_state")
         .ok_or(AppError::BadRequest("Missing OAuth state cookie".into()))?;
 
     let query_state = query
@@ -657,8 +705,6 @@ pub async fn github_callback(
     }
     let redirect_uri = std::env::var("GITHUB_REDIRECT_URL")
         .unwrap_or_else(|_| default_oauth_redirect_uri("github"));
-    let frontend_url =
-        std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
@@ -752,16 +798,7 @@ pub async fn github_callback(
             .await?;
     }
 
-    record_login_session(&service, &auth_res.token, &headers, &addr).await;
+    record_login_session(service, &auth_res.token, headers, addr).await;
 
-    // See the matching comment in google_callback: a cookie can't bridge
-    // the backend's and frontend's separate domains, so the token goes in
-    // a URL fragment instead, which never reaches any server.
-    let redirect_to = format!(
-        "{}/#token={}",
-        frontend_url.trim_end_matches('/'),
-        urlencoding::encode(&auth_res.token)
-    );
-
-    Ok(axum::response::Redirect::temporary(&redirect_to).into_response())
+    Ok(auth_res.token)
 }

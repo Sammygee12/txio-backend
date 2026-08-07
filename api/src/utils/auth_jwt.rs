@@ -73,6 +73,7 @@ impl JwtHelper {
 
 use axum::{Extension, extract::FromRequestParts, http::request::Parts};
 
+#[axum::async_trait]
 impl<S> FromRequestParts<S> for Claims
 where
     S: Send + Sync,
