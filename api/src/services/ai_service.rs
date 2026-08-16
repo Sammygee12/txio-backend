@@ -5,15 +5,15 @@ use crate::{
 use dotenvy::{from_path_iter, from_path_override};
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::{
-    Arc,
     atomic::{AtomicUsize, Ordering},
+    Arc,
 };
 
 const GROQ_CHAT_COMPLETIONS_URL: &str = "https://api.groq.com/openai/v1/chat/completions";
-const DEFAULT_GROQ_MODEL: &str = "llama-3.3-70b-versatile";
+const DEFAULT_GROQ_MODEL: &str = "qwen/qwen3.6-27b";
 const SYSTEM_PROMPT: &str = "You are a technical assistant for Sui blockchain development. Be concise. Provide raw code or JSON when asked.";
 
 #[derive(Debug, Clone)]
@@ -375,15 +375,20 @@ fn is_retryable_status(status: StatusCode) -> bool {
 }
 
 fn parse_groq_error(status: StatusCode, body: &str) -> String {
-    serde_json::from_str::<Value>(body)
-        .ok()
-        .and_then(|value| {
-            value
-                .get("error")
-                .and_then(|error| error.get("message"))
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        })
+    let parsed = serde_json::from_str::<Value>(body).ok();
+
+    let code = parsed
+        .as_ref()
+        .and_then(|value| value.get("error"))
+        .and_then(|error| error.get("code"))
+        .and_then(Value::as_str);
+
+    let message = parsed
+        .as_ref()
+        .and_then(|value| value.get("error"))
+        .and_then(|error| error.get("message"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
         .or_else(|| {
             let trimmed = body.trim();
 
@@ -392,6 +397,58 @@ fn parse_groq_error(status: StatusCode, body: &str) -> String {
             } else {
                 Some(trimmed.to_string())
             }
-        })
-        .unwrap_or_else(|| format!("Groq request failed with status {status}."))
+        });
+
+    let err_msg = message.unwrap_or_else(|| format!("Groq request failed with status {status}."));
+    let lower = err_msg.to_lowercase();
+
+    let is_model_error = code == Some("model_decommissioned")
+        || code == Some("model_not_found")
+        || lower.contains("decommissioned")
+        || (status == StatusCode::BAD_REQUEST || status == StatusCode::NOT_FOUND)
+            && (lower.contains("model")
+                && (lower.contains("not found")
+                    || lower.contains("does not exist")
+                    || lower.contains("invalid")));
+
+    if is_model_error {
+        format!(
+            "Groq model decommissioned or unavailable: {err_msg}. Please update GROQ_MODEL in your environment configuration."
+        )
+    } else {
+        err_msg
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_groq_model() {
+        assert_eq!(DEFAULT_GROQ_MODEL, "qwen/qwen3.6-27b");
+    }
+
+    #[test]
+    fn test_parse_groq_error_standard() {
+        let body = r#"{"error":{"message":"Invalid API Key"}}"#;
+        let err = parse_groq_error(StatusCode::UNAUTHORIZED, body);
+        assert_eq!(err, "Invalid API Key");
+    }
+
+    #[test]
+    fn test_parse_groq_error_decommissioned() {
+        let body = r#"{"error":{"message":"The model llama-3.3-70b-versatile has been decommissioned","code":"model_decommissioned"}}"#;
+        let err = parse_groq_error(StatusCode::BAD_REQUEST, body);
+        assert!(err.contains("Groq model decommissioned or unavailable"));
+        assert!(err.contains("Please update GROQ_MODEL in your environment configuration"));
+    }
+
+    #[test]
+    fn test_parse_groq_error_model_not_found() {
+        let body = r#"{"error":{"message":"Model non-existent-model not found","code":"model_not_found"}}"#;
+        let err = parse_groq_error(StatusCode::NOT_FOUND, body);
+        assert!(err.contains("Groq model decommissioned or unavailable"));
+        assert!(err.contains("Please update GROQ_MODEL in your environment configuration"));
+    }
 }

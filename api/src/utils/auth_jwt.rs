@@ -1,6 +1,6 @@
 use crate::utils::error::AppError;
 use chrono::{Duration, Utc};
-use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -71,7 +71,7 @@ impl JwtHelper {
     }
 }
 
-use axum::{Extension, extract::FromRequestParts, http::request::Parts};
+use axum::{extract::FromRequestParts, http::request::Parts, Extension};
 
 #[axum::async_trait]
 impl<S> FromRequestParts<S> for Claims

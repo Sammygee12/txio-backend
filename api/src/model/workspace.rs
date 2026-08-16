@@ -2,16 +2,11 @@ use chrono::{DateTime, Utc};
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub enum WorkspaceType {
+    #[default]
     Personal,
     Team,
-}
-
-impl Default for WorkspaceType {
-    fn default() -> Self {
-        Self::Personal
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

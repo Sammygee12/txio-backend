@@ -11,14 +11,14 @@ use crate::model::user::GitHubAccount;
 use crate::services::auth_service::AuthService;
 use crate::utils::error::AppError;
 use axum::{
-    Json,
     extract::{ConnectInfo, Path, State},
-    http::{HeaderMap, header},
+    http::{header, HeaderMap},
     response::IntoResponse,
+    Json,
 };
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hmac::{Hmac, KeyInit, Mac};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use sha2::Sha256;
 use std::net::SocketAddr;
 

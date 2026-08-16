@@ -8,7 +8,7 @@ use std::{
 use tokio::{
     io::AsyncReadExt,
     process::Command,
-    sync::{RwLock, oneshot},
+    sync::{oneshot, RwLock},
     task::JoinHandle,
     time::sleep,
 };

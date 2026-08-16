@@ -1,8 +1,8 @@
 use crate::api::handlers::collection_handler;
 use crate::services::collection_service::CollectionService;
 use axum::{
-    Router,
     routing::{delete, get, post, put},
+    Router,
 };
 
 pub fn router(service: CollectionService) -> Router {

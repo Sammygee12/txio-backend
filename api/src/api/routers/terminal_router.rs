@@ -1,8 +1,8 @@
 use crate::api::handlers::terminal_handler;
 use crate::services::terminal_service::TerminalService;
 use axum::{
-    Router,
     routing::{get, post},
+    Router,
 };
 
 pub fn router(service: TerminalService) -> Router {

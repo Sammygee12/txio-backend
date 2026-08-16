@@ -1,8 +1,8 @@
 use crate::{api::handlers::ai_handler, api::middleware::auth, services::ai_service::AiService};
-use axum::{Router, routing::post};
+use axum::{routing::post, Router};
 use std::{sync::Arc, time::Duration};
 use tower_governor::{
-    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::PeerIpKeyExtractor,
+    governor::GovernorConfigBuilder, key_extractor::PeerIpKeyExtractor, GovernorLayer,
 };
 
 pub fn router(service: AiService) -> Router {
