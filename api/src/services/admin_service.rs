@@ -1,6 +1,7 @@
 use crate::dtos::admin_dtos::{AdminLogEntry, AdminStatsResponse};
 use crate::model::user::User;
 use crate::repositories::rpc_repository::RpcRepository;
+use crate::repositories::session_repository::SessionRepository;
 use crate::repositories::user_repository::UserRepository;
 use crate::utils::auth_jwt::Claims;
 use crate::utils::error::AppError;
@@ -10,13 +11,19 @@ use mongodb::bson::oid::ObjectId;
 pub struct AdminService {
     user_repo: UserRepository,
     rpc_repo: RpcRepository,
+    session_repo: SessionRepository,
 }
 
 impl AdminService {
-    pub fn new(user_repo: UserRepository, rpc_repo: RpcRepository) -> Self {
+    pub fn new(
+        user_repo: UserRepository,
+        rpc_repo: RpcRepository,
+        session_repo: SessionRepository,
+    ) -> Self {
         Self {
             user_repo,
             rpc_repo,
+            session_repo,
         }
     }
 
@@ -50,6 +57,12 @@ impl AdminService {
             .id
             .map(|id| id.to_hex())
             .ok_or_else(|| AppError::InternalError("User ID missing".into()))?;
+
+        // Clean up all sessions before deleting the account, matching the
+        // ordering and fail-closed error propagation in AuthService::delete_user_by_email.
+        let oid = ObjectId::parse_str(&user_id)
+            .map_err(|_| AppError::InternalError("Invalid user ID".into()))?;
+        self.session_repo.delete_all_by_user_id(&oid).await?;
 
         let deleted = self.user_repo.delete_by_id(&user_id).await?;
         Ok(deleted.email)
