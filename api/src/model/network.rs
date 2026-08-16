@@ -23,7 +23,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 
 /// A blockchain network supported by txio.
 ///

@@ -1,11 +1,11 @@
 use axum::{
-    BoxError, Router, error_handling::HandleErrorLayer, http, http::HeaderValue, http::StatusCode,
-    routing::get,
+    error_handling::HandleErrorLayer, http, http::HeaderValue, http::StatusCode, routing::get,
+    BoxError, Router,
 };
 use dotenvy::{dotenv, from_path_override};
 use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 use tower::ServiceBuilder;
-use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
+use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 
@@ -198,11 +198,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // tower_governor retains rate-limit state per key forever unless pruned;
     // without this the map of seen IPs would grow without bound.
     let governor_limiter = governor_conf.limiter().clone();
-    std::thread::spawn(move || {
-        loop {
-            std::thread::sleep(Duration::from_secs(60));
-            governor_limiter.retain_recent();
-        }
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(60));
+        governor_limiter.retain_recent();
     });
 
     // 7. Build Router

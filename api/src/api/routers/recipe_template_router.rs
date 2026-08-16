@@ -1,8 +1,8 @@
 use crate::api::handlers::recipe_template_handler;
 use crate::services::recipe_template_service::RecipeTemplateService;
 use axum::{
-    Router,
     routing::{delete, get, post},
+    Router,
 };
 
 pub fn router(service: RecipeTemplateService) -> Router {

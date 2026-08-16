@@ -1,8 +1,8 @@
 use crate::api::handlers::workspace_handler;
 use crate::services::workspace_service::WorkspaceService;
 use axum::{
-    Router,
     routing::{get, post},
+    Router,
 };
 
 pub fn router(service: WorkspaceService) -> Router {

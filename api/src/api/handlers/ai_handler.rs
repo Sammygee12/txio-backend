@@ -3,7 +3,7 @@ use crate::{
     services::ai_service::AiService,
     utils::error::AppError,
 };
-use axum::{Json, extract::State};
+use axum::{extract::State, Json};
 use validator::Validate;
 
 pub async fn chat(
