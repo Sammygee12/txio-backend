@@ -244,16 +244,13 @@ impl AuthService {
             // Only track attempts for real accounts — don't create a user-enumeration
             // oracle by behaving differently, but also don't write to a nonexistent doc.
             if user_found {
-                let user = user_result.as_ref().unwrap();
-                let attempts = user.failed_login_attempts + 1;
-                let locked_until = if attempts >= MAX_FAILED_ATTEMPTS {
-                    Some(Utc::now() + chrono::Duration::minutes(LOCKOUT_MINUTES))
-                } else {
-                    None
-                };
                 let _ = self
                     .repo
-                    .update_login_attempts(&email, attempts, locked_until)
+                    .record_failed_login_attempt(
+                        &email,
+                        MAX_FAILED_ATTEMPTS,
+                        chrono::Duration::minutes(LOCKOUT_MINUTES),
+                    )
                     .await;
             }
             return Err(AppError::Unauthorized("Invalid credentials".into()));
@@ -262,8 +259,8 @@ impl AuthService {
         let user = user_result.unwrap();
 
         // Reset counter on successful login.
-        if user.failed_login_attempts > 0 {
-            let _ = self.repo.update_login_attempts(&user.email, 0, None).await;
+        if user.failed_login_attempts > 0 || user.locked_until.is_some() {
+            let _ = self.repo.reset_login_attempts(&user.email).await;
         }
 
         let user_id = user.id.map(|id| id.to_string()).unwrap_or_default();
