@@ -3,8 +3,8 @@ use crate::services::terminal_service::{CommandExecutionResponse, TerminalServic
 use crate::utils::auth_jwt::Claims;
 use crate::utils::error::AppError;
 use axum::{
-    Json,
     extract::{Path, State},
+    Json,
 };
 use validator::Validate;
 

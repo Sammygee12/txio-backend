@@ -20,21 +20,11 @@ impl OTPService {
     }
 
     pub async fn generate_otp(&self, email: &str) -> Result<String, AppError> {
-        let now = Utc::now();
-
-        if let Ok(existing_otp) = self.repository.find_by_email(email).await {
-            if now < existing_otp.created_at + Duration::seconds(OTP_SEND_COOLDOWN_SECONDS) {
-                return Err(AppError::BadRequest(
-                    "OTP request rate limit exceeded. Please try again later.".into(),
-                ));
-            }
-
-            let _ = self.repository.delete_by_email(email).await;
-        }
-
         let code = generate_otp(OTP_LENGTH);
         let otp = OTP::new(email.to_string(), code.clone());
-        self.repository.save(&otp).await?;
+        self.repository
+            .upsert_otp(&otp, OTP_SEND_COOLDOWN_SECONDS)
+            .await?;
 
         Ok(code)
     }
@@ -83,4 +73,20 @@ pub(crate) fn constant_time_eq(a: &str, b: &str) -> bool {
     }
 
     diff == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_constant_time_eq_matching() {
+        assert!(constant_time_eq("123456", "123456"));
+    }
+
+    #[test]
+    fn test_constant_time_eq_mismatch() {
+        assert!(!constant_time_eq("123456", "654321"));
+        assert!(!constant_time_eq("123456", "12345"));
+    }
 }

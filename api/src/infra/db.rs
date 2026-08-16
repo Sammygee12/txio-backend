@@ -1,4 +1,4 @@
-use mongodb::{Client, error::Error, options::ClientOptions};
+use mongodb::{error::Error, options::ClientOptions, Client};
 
 pub async fn establish_connection(uri: &str) -> mongodb::error::Result<Client> {
     let mut client_options = ClientOptions::parse(uri).await?;

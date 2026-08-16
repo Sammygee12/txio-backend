@@ -33,7 +33,7 @@ impl WorkspaceRepository {
             workspaces.push(workspace);
         }
 
-        workspaces.sort_by(|left, right| left.created_at.cmp(&right.created_at));
+        workspaces.sort_by_key(|left| left.created_at);
 
         Ok(workspaces)
     }

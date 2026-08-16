@@ -5,11 +5,11 @@ use crate::{
 use dotenvy::{from_path_iter, from_path_override};
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::{
-    Arc,
     atomic::{AtomicUsize, Ordering},
+    Arc,
 };
 
 const GROQ_CHAT_COMPLETIONS_URL: &str = "https://api.groq.com/openai/v1/chat/completions";

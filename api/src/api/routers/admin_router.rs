@@ -1,8 +1,8 @@
 use crate::api::handlers::admin_handler;
 use crate::services::admin_service::AdminService;
 use axum::{
-    Router,
     routing::{get, post},
+    Router,
 };
 
 pub fn router(service: AdminService) -> Router {
