@@ -80,14 +80,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let user_repo = repositories::user_repository::UserRepository::new(&db);
     user_repo.ensure_indices().await?;
+
     let otp_repo = repositories::otp_repository::OTPRepository::new(&db);
     otp_repo.ensure_indexes().await?;
+
     let rpc_repo = repositories::rpc_repository::RpcRepository::new(&db);
+    rpc_repo.ensure_indexes().await?;
+
     let collection_repo = repositories::collection_repository::CollectionRepository::new(&db);
+    collection_repo.ensure_indexes().await?;
+
     let recipe_template_repo =
         repositories::recipe_template_repository::RecipeTemplateRepository::new(&db);
+    recipe_template_repo.ensure_indexes().await?;
+
     let request_repo = repositories::request_repository::RequestRepository::new(&db);
+    request_repo.ensure_indexes().await?;
+
     let workspace_repo = repositories::workspace_repository::WorkspaceRepository::new(&db);
+    workspace_repo.ensure_indexes().await?;
+
     let session_repo = repositories::session_repository::SessionRepository::new(&db);
 
     // 5. Initialize JWT Helper

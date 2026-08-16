@@ -20,7 +20,7 @@ impl OTPRepository {
     }
 
     pub async fn ensure_indexes(&self) -> Result<(), AppError> {
-        let index = IndexModel::builder()
+        let ttl_index = IndexModel::builder()
             .keys(doc! { "created_at": 1 })
             .options(
                 IndexOptions::builder()
@@ -30,8 +30,20 @@ impl OTPRepository {
             )
             .build();
 
-        self.collection.create_index(index, None).await?;
-        Ok(())
+        let email_index = IndexModel::builder()
+            .keys(doc! { "email": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name(Some("otps_email_idx".to_string()))
+                    .build(),
+            )
+            .build();
+
+        self.collection
+            .create_indexes(vec![ttl_index, email_index], None)
+            .await
+            .map(|_| ())
+            .map_err(AppError::Database)
     }
 
     pub async fn save(&self, otp: &OTP) -> Result<OTP, AppError> {
