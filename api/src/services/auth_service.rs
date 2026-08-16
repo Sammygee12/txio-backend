@@ -222,23 +222,24 @@ impl AuthService {
             }
         }
 
-        // Check lockout before doing anything else.
-        if let Ok(ref user) = user_result {
-            if let Some(locked_until) = user.locked_until {
-                if Utc::now() < locked_until {
-                    return Err(AppError::Unauthorized(
-                        "Account is temporarily locked. Try again later.".into(),
-                    ));
-                }
+        let (hash_to_verify, user_found, is_locked) = match &user_result {
+            Ok(user) => {
+                let locked = user
+                    .locked_until
+                    .map(|locked_until| Utc::now() < locked_until)
+                    .unwrap_or(false);
+                (user.password_hash.as_str(), true, locked)
             }
-        }
-
-        let (hash_to_verify, user_found) = match &user_result {
-            Ok(user) => (user.password_hash.as_str(), true),
-            Err(_) => (DUMMY_HASH, false),
+            Err(_) => (DUMMY_HASH, false, false),
         };
 
+        // Always run password verification against real hash or constant-time dummy hash to avoid timing leaks.
         let is_valid = bcrypt::verify(req.password.as_bytes(), hash_to_verify).unwrap_or(false);
+
+        // If account is currently locked out, reject login with uniform error without recording new attempts.
+        if is_locked {
+            return Err(AppError::Unauthorized("Invalid credentials".into()));
+        }
 
         if !user_found || !is_valid {
             // Only track attempts for real accounts — don't create a user-enumeration
