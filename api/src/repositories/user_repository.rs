@@ -112,6 +112,62 @@ impl UserRepository {
         Ok(user.clone())
     }
 
+    pub async fn record_failed_login_attempt(
+        &self,
+        email: &str,
+        max_failed_attempts: i32,
+        lockout_duration: chrono::Duration,
+    ) -> Result<i32, AppError> {
+        let now = chrono::Utc::now();
+        let locked_until = now + lockout_duration;
+        let locked_until_bson = mongodb::bson::DateTime::from_millis(locked_until.timestamp_millis());
+
+        // Atomically increment failed_login_attempts
+        let update = doc! {
+            "$inc": { "failed_login_attempts": 1 }
+        };
+
+        let options = mongodb::options::FindOneAndUpdateOptions::builder()
+            .return_document(mongodb::options::ReturnDocument::After)
+            .build();
+
+        let updated_user = self
+            .collection
+            .find_one_and_update(doc! { "email": email }, update, options)
+            .await
+            .map_err(AppError::Database)?;
+
+        if let Some(user) = updated_user {
+            let attempts = user.failed_login_attempts;
+            if attempts >= max_failed_attempts {
+                // Set locked_until if threshold reached
+                let lock_update = doc! {
+                    "$set": { "locked_until": locked_until_bson }
+                };
+                let _ = self
+                    .collection
+                    .update_one(doc! { "email": email }, lock_update, None)
+                    .await;
+            }
+            Ok(attempts)
+        } else {
+            Err(AppError::NotFound("User not found".into()))
+        }
+    }
+
+    pub async fn reset_login_attempts(&self, email: &str) -> Result<(), AppError> {
+        let update = doc! {
+            "$set": { "failed_login_attempts": 0 },
+            "$unset": { "locked_until": "" },
+        };
+
+        self.collection
+            .update_one(doc! { "email": email }, update, None)
+            .await
+            .map(|_| ())
+            .map_err(AppError::Database)
+    }
+
     pub async fn update_login_attempts(
         &self,
         email: &str,
