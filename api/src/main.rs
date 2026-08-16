@@ -105,7 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth_service = services::auth_service::AuthService::new(
         user_repo.clone(),
         rpc_repo.clone(),
-        session_repo,
+        session_repo.clone(),
         jwt_helper.clone(),
         otp_service,
         email_service,
@@ -126,8 +126,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let recipe_template_service =
         services::recipe_template_service::RecipeTemplateService::new(recipe_template_repo);
 
-    let admin_service =
-        services::admin_service::AdminService::new(user_repo.clone(), rpc_repo.clone());
+    let admin_service = services::admin_service::AdminService::new(
+        user_repo.clone(),
+        rpc_repo.clone(),
+        session_repo,
+    );
 
     let terminal_service = services::terminal_service::TerminalService::new();
     let ai_service = services::ai_service::AiService::from_env();
