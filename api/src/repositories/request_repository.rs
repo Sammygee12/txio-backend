@@ -1,7 +1,8 @@
 use crate::model::request::SavedRequest;
 use crate::utils::error::AppError;
 use mongodb::bson::{doc, oid::ObjectId};
-use mongodb::{Collection, Database};
+use mongodb::options::IndexOptions;
+use mongodb::{Collection, Database, IndexModel};
 
 #[derive(Clone)]
 pub struct RequestRepository {
@@ -12,6 +13,23 @@ impl RequestRepository {
     pub fn new(db: &Database) -> Self {
         let collection = db.collection("saved_requests");
         Self { collection }
+    }
+
+    pub async fn ensure_indexes(&self) -> Result<(), AppError> {
+        let collection_id_index = IndexModel::builder()
+            .keys(doc! { "collection_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name(Some("saved_requests_collection_id_idx".to_string()))
+                    .build(),
+            )
+            .build();
+
+        self.collection
+            .create_index(collection_id_index, None)
+            .await
+            .map(|_| ())
+            .map_err(AppError::Database)
     }
 
     pub async fn save(&self, request: &SavedRequest) -> Result<SavedRequest, AppError> {

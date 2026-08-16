@@ -1,6 +1,8 @@
 use crate::model::rpc::RpcLog;
 use crate::utils::error::AppError;
-use mongodb::{Collection, Database};
+use mongodb::bson::doc;
+use mongodb::options::IndexOptions;
+use mongodb::{Collection, Database, IndexModel};
 
 #[derive(Clone)]
 pub struct RpcRepository {
@@ -11,6 +13,23 @@ impl RpcRepository {
     pub fn new(db: &Database) -> Self {
         let collection = db.collection("rpc_logs");
         Self { collection }
+    }
+
+    pub async fn ensure_indexes(&self) -> Result<(), AppError> {
+        let user_id_index = IndexModel::builder()
+            .keys(doc! { "user_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name(Some("rpc_logs_user_id_idx".to_string()))
+                    .build(),
+            )
+            .build();
+
+        self.collection
+            .create_index(user_id_index, None)
+            .await
+            .map(|_| ())
+            .map_err(AppError::Database)
     }
 
     pub async fn save(&self, log: &RpcLog) -> Result<(), AppError> {

@@ -1,7 +1,8 @@
 use crate::model::recipe_template::RecipeTemplate;
 use crate::utils::error::AppError;
 use mongodb::bson::{doc, oid::ObjectId};
-use mongodb::{Collection as MongoCollection, Database};
+use mongodb::options::IndexOptions;
+use mongodb::{Collection as MongoCollection, Database, IndexModel};
 
 #[derive(Clone)]
 pub struct RecipeTemplateRepository {
@@ -12,6 +13,23 @@ impl RecipeTemplateRepository {
     pub fn new(db: &Database) -> Self {
         let collection = db.collection("recipe_templates");
         Self { collection }
+    }
+
+    pub async fn ensure_indexes(&self) -> Result<(), AppError> {
+        let user_id_index = IndexModel::builder()
+            .keys(doc! { "user_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name(Some("recipe_templates_user_id_idx".to_string()))
+                    .build(),
+            )
+            .build();
+
+        self.collection
+            .create_index(user_id_index, None)
+            .await
+            .map(|_| ())
+            .map_err(AppError::Database)
     }
 
     pub async fn save(&self, template: &RecipeTemplate) -> Result<RecipeTemplate, AppError> {
