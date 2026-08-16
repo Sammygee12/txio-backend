@@ -369,6 +369,8 @@ impl AuthService {
             .map_err(|_| AppError::InternalError("Failed to hash password".into()))?;
 
         user.password_hash = password_hash;
+        user.failed_login_attempts = 0;
+        user.locked_until = None;
         self.repo.update(&user).await?;
         Ok(())
     }
