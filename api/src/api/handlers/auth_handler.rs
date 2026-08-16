@@ -254,6 +254,11 @@ pub async fn update_notification_preferences(
     claims: crate::utils::auth_jwt::Claims,
     Json(payload): Json<UpdateNotificationPreferencesRequest>,
 ) -> Result<Json<Value>, AppError> {
+    use validator::Validate;
+    payload
+        .validate()
+        .map_err(|e| AppError::ValidationError(e.to_string()))?;
+
     let user = service
         .update_notification_preferences_by_email(&claims.email, payload.notification_preferences)
         .await?;
@@ -359,6 +364,11 @@ pub async fn switch_network(
 ) -> Result<Json<Value>, AppError> {
     use mongodb::bson::oid::ObjectId;
     use std::str::FromStr;
+    use validator::Validate;
+
+    payload
+        .validate()
+        .map_err(|e| AppError::ValidationError(e.to_string()))?;
 
     let user_id = ObjectId::from_str(&claims.sub)
         .map_err(|_| AppError::InternalError("Invalid user ID in token".into()))?;
