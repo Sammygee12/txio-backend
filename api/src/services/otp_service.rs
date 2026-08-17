@@ -22,6 +22,9 @@ impl OTPService {
     pub async fn generate_otp(&self, email: &str) -> Result<String, AppError> {
         let now = Utc::now();
 
+        // Check cooldown regardless of row state (locked or active). This
+        // prevents a resend-cooldown bypass where the attacker forces row
+        // deletion via cap-out or expiry, clearing the cooldown check.
         if let Ok(existing_otp) = self.repository.find_by_email(email).await {
             if now < existing_otp.created_at + Duration::seconds(OTP_SEND_COOLDOWN_SECONDS) {
                 return Err(AppError::BadRequest(
@@ -29,6 +32,7 @@ impl OTPService {
                 ));
             }
 
+            // Cooldown has passed — remove the old row (locked or expired) before issuing a new one.
             let _ = self.repository.delete_by_email(email).await;
         }
 
@@ -46,20 +50,31 @@ impl OTPService {
             Err(e) => return Err(e),
         };
 
+        // Reject locked rows immediately — the cap was already hit.
+        if otp.locked {
+            return Ok(false);
+        }
+
         let now = Utc::now();
         if now > otp.created_at + Duration::minutes(OTP_VALIDITY_MINUTES) {
+            // Expired: delete so the next generate_otp call can proceed after
+            // the cooldown window elapses from `created_at`.
             let _ = self.repository.delete_by_email(email).await;
             return Ok(false);
         }
 
         if !constant_time_eq(&otp.otp, code) {
-            let failed_attempts = otp.failed_attempts + 1;
-            if failed_attempts >= OTP_MAX_FAILED_ATTEMPTS {
-                let _ = self.repository.delete_by_email(email).await;
-            } else {
-                self.repository
-                    .update_failed_attempts(email, failed_attempts)
-                    .await?;
+            // Atomically increment the counter and derive the cap decision from
+            // the post-increment value returned by the atomic operation.
+            // This eliminates the lost-update race when concurrent wrong-code
+            // guesses all read the same stale `failed_attempts` baseline.
+            match self.repository.inc_failed_attempts(email).await {
+                Ok(updated) if updated.failed_attempts >= OTP_MAX_FAILED_ATTEMPTS => {
+                    // Lock the row in place instead of deleting it; `generate_otp`
+                    // will still find `created_at` and enforce the cooldown.
+                    let _ = self.repository.lock_row(email).await;
+                }
+                _ => {}
             }
             return Ok(false);
         }

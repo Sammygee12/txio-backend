@@ -1,7 +1,7 @@
 use crate::model::otp::OTP;
 use crate::utils::error::AppError;
 use mongodb::bson::doc;
-use mongodb::options::IndexOptions;
+use mongodb::options::{FindOneAndUpdateOptions, IndexOptions, ReturnDocument};
 use mongodb::{Collection, Database, IndexModel};
 use std::time::Duration;
 
@@ -67,15 +67,36 @@ impl OTPRepository {
         Ok(otp)
     }
 
-    pub async fn update_failed_attempts(
-        &self,
-        email: &str,
-        failed_attempts: i32,
-    ) -> Result<(), AppError> {
+    /// Atomically increments `failed_attempts` by 1 using `$inc` and returns
+    /// the post-increment document. Unlike a read-then-write with `$set`, this
+    /// is safe under concurrent requests — each guess lands exactly once.
+    pub async fn inc_failed_attempts(&self, email: &str) -> Result<OTP, AppError> {
+        let opts = FindOneAndUpdateOptions::builder()
+            .return_document(ReturnDocument::After)
+            .build();
+
+        let updated = self
+            .collection
+            .find_one_and_update(
+                doc! { "email": email },
+                doc! { "$inc": { "failed_attempts": 1 } },
+                opts,
+            )
+            .await?
+            .ok_or(AppError::NotFound("OTP not found for email".to_string()))?;
+
+        Ok(updated)
+    }
+
+    /// Marks the OTP row as locked (cap-out) in place. The row is NOT
+    /// deleted; it remains until the TTL index removes it so that
+    /// `generate_otp` can still read `created_at` and enforce the resend
+    /// cooldown even after a failed-attempt cap-out.
+    pub async fn lock_row(&self, email: &str) -> Result<(), AppError> {
         self.collection
             .update_one(
                 doc! { "email": email },
-                doc! { "$set": { "failed_attempts": failed_attempts } },
+                doc! { "$set": { "locked": true } },
                 None,
             )
             .await?;
