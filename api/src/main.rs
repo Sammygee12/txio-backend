@@ -80,14 +80,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let user_repo = repositories::user_repository::UserRepository::new(&db);
     user_repo.ensure_indices().await?;
+
     let otp_repo = repositories::otp_repository::OTPRepository::new(&db);
     otp_repo.ensure_indexes().await?;
+
     let rpc_repo = repositories::rpc_repository::RpcRepository::new(&db);
+    rpc_repo.ensure_indexes().await?;
+
     let collection_repo = repositories::collection_repository::CollectionRepository::new(&db);
+    collection_repo.ensure_indexes().await?;
+
     let recipe_template_repo =
         repositories::recipe_template_repository::RecipeTemplateRepository::new(&db);
+    recipe_template_repo.ensure_indexes().await?;
+
     let request_repo = repositories::request_repository::RequestRepository::new(&db);
+    request_repo.ensure_indexes().await?;
+
     let workspace_repo = repositories::workspace_repository::WorkspaceRepository::new(&db);
+    workspace_repo.ensure_indexes().await?;
+
     let session_repo = repositories::session_repository::SessionRepository::new(&db);
 
     // 5. Initialize JWT Helper
@@ -105,7 +117,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth_service = services::auth_service::AuthService::new(
         user_repo.clone(),
         rpc_repo.clone(),
-        session_repo,
+        session_repo.clone(),
         jwt_helper.clone(),
         otp_service,
         email_service,
@@ -126,8 +138,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let recipe_template_service =
         services::recipe_template_service::RecipeTemplateService::new(recipe_template_repo);
 
-    let admin_service =
-        services::admin_service::AdminService::new(user_repo.clone(), rpc_repo.clone());
+    let admin_service = services::admin_service::AdminService::new(
+        user_repo.clone(),
+        rpc_repo.clone(),
+        session_repo,
+    );
 
     let terminal_service = services::terminal_service::TerminalService::new();
     let ai_service = services::ai_service::AiService::from_env();

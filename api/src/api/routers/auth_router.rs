@@ -25,6 +25,15 @@ pub fn router(service: AuthService) -> Router {
             .expect("valid governor rate-limit configuration"),
     );
 
+    // Rate limiter for /verify-otp — same profile as /login and /request-otp.
+    let otp_verify_rate_limiter = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_millisecond(200)
+            .burst_size(10)
+            .finish()
+            .expect("valid governor rate-limit configuration"),
+    );
+
     Router::new()
         .route("/health", get(|| async { Json(json!({ "status": "ok" })) }))
         .route("/register", post(auth_handler::register))
@@ -40,7 +49,12 @@ pub fn router(service: AuthService) -> Router {
                 config: otp_send_rate_limiter.clone(),
             }),
         )
-        .route("/verify-otp", post(auth_handler::verify_otp))
+        .route(
+            "/verify-otp",
+            post(auth_handler::verify_otp).layer(GovernorLayer {
+                config: otp_verify_rate_limiter,
+            }),
+        )
         .route("/profile", axum::routing::get(auth_handler::profile))
         .route("/get-user-profile", post(auth_handler::get_user_profile))
         .route("/update-email", post(auth_handler::update_user_email))

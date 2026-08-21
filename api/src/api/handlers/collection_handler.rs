@@ -165,6 +165,10 @@ pub async fn update_request(
     Path((_col_id, req_id)): Path<(String, String)>, // Collection ID (ignored/redundant), Request ID
     Json(payload): Json<UpdateSavedRequestRequest>,
 ) -> Result<Json<Value>, AppError> {
+    payload
+        .validate()
+        .map_err(|e| AppError::ValidationError(e.to_string()))?;
+
     let user_id = ObjectId::from_str(&claims.sub)
         .map_err(|_| AppError::Unauthorized("Invalid user ID in token".into()))?;
     let request_id = ObjectId::from_str(&req_id)

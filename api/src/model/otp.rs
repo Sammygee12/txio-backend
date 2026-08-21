@@ -11,6 +11,12 @@ pub struct OTP {
     #[serde(default)]
     pub failed_attempts: i32,
     pub created_at: DateTime<Utc>,
+    /// Set to `true` when the failed-attempt cap is reached. A locked row is
+    /// not deleted immediately; it stays in the collection until the TTL index
+    /// removes it so that `generate_otp` can still read `created_at` and
+    /// enforce the resend cooldown, even after cap-out.
+    #[serde(default)]
+    pub locked: bool,
 }
 
 impl OTP {
@@ -21,6 +27,7 @@ impl OTP {
             otp,
             failed_attempts: 0,
             created_at: Utc::now(),
+            locked: false,
         }
     }
 }

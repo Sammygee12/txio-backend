@@ -2,7 +2,7 @@ use crate::model::otp::OTP;
 use crate::utils::error::AppError;
 use chrono::Duration as ChronoDuration;
 use mongodb::bson::doc;
-use mongodb::options::{FindOneAndReplaceOptions, IndexOptions};
+use mongodb::options::{FindOneAndUpdateOptions, IndexOptions, ReturnDocument};
 use mongodb::{Collection, Database, IndexModel};
 use std::time::Duration as StdDuration;
 
@@ -31,55 +31,20 @@ impl OTPRepository {
             )
             .build();
 
-        let unique_email_index = IndexModel::builder()
+        let email_index = IndexModel::builder()
             .keys(doc! { "email": 1 })
             .options(
                 IndexOptions::builder()
-                    .name(Some("otps_email_unique".to_string()))
-                    .unique(true)
+                    .name(Some("otps_email_idx".to_string()))
                     .build(),
             )
             .build();
 
-        self.deduplicate_by_email().await?;
-
-        self.collection.create_index(ttl_index, None).await?;
         self.collection
-            .create_index(unique_email_index, None)
-            .await?;
-        Ok(())
-    }
-
-    async fn deduplicate_by_email(&self) -> Result<(), AppError> {
-        let pipeline = vec![
-            doc! {
-                "$group": {
-                    "_id": "$email",
-                    "count": { "$sum": 1 },
-                    "ids": { "$push": "$_id" }
-                }
-            },
-            doc! {
-                "$match": {
-                    "count": { "$gt": 1 }
-                }
-            },
-        ];
-
-        let mut cursor = self.collection.aggregate(pipeline, None).await?;
-        while cursor.advance().await? {
-            let doc = cursor.deserialize_current().map_err(AppError::Database)?;
-            if let Ok(ids) = doc.get_array("ids") {
-                let delete_ids: Vec<_> = ids.iter().skip(1).cloned().collect();
-                if !delete_ids.is_empty() {
-                    self.collection
-                        .delete_many(doc! { "_id": { "$in": delete_ids } }, None)
-                        .await?;
-                }
-            }
-        }
-
-        Ok(())
+            .create_indexes(vec![ttl_index, email_index], None)
+            .await
+            .map(|_| ())
+            .map_err(AppError::Database)
     }
 
     pub async fn save(&self, otp: &OTP) -> Result<OTP, AppError> {
@@ -131,15 +96,36 @@ impl OTPRepository {
         Ok(otp)
     }
 
-    pub async fn update_failed_attempts(
-        &self,
-        email: &str,
-        failed_attempts: i32,
-    ) -> Result<(), AppError> {
+    /// Atomically increments `failed_attempts` by 1 using `$inc` and returns
+    /// the post-increment document. Unlike a read-then-write with `$set`, this
+    /// is safe under concurrent requests — each guess lands exactly once.
+    pub async fn inc_failed_attempts(&self, email: &str) -> Result<OTP, AppError> {
+        let opts = FindOneAndUpdateOptions::builder()
+            .return_document(ReturnDocument::After)
+            .build();
+
+        let updated = self
+            .collection
+            .find_one_and_update(
+                doc! { "email": email },
+                doc! { "$inc": { "failed_attempts": 1 } },
+                opts,
+            )
+            .await?
+            .ok_or(AppError::NotFound("OTP not found for email".to_string()))?;
+
+        Ok(updated)
+    }
+
+    /// Marks the OTP row as locked (cap-out) in place. The row is NOT
+    /// deleted; it remains until the TTL index removes it so that
+    /// `generate_otp` can still read `created_at` and enforce the resend
+    /// cooldown even after a failed-attempt cap-out.
+    pub async fn lock_row(&self, email: &str) -> Result<(), AppError> {
         self.collection
             .update_one(
                 doc! { "email": email },
-                doc! { "$set": { "failed_attempts": failed_attempts } },
+                doc! { "$set": { "locked": true } },
                 None,
             )
             .await?;
